@@ -1,11 +1,23 @@
 use core::panic;
 use reqwest::Url;
-use std::{env, error, path::PathBuf, str::FromStr};
+use std::{env, error, path::{PathBuf}, str::FromStr, };
 use tokio::{fs, io::AsyncWriteExt};
 
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
+    let save_location_arg = args.get(2).expect("2nd arg needs to be a path to save folder");
+    let save_location = PathBuf::from(save_location_arg);
+    if !save_location.is_dir() {
+        println!("save folder path doesnt exist attempting to create...");
+        match fs::create_dir_all(&save_location).await {
+            Ok(_) => { println!("save path folder created")},
+            Err(err) =>  {
+                panic!("{}" , err)
+            }
+           };
+    } 
+
     let url = Url::from_str(args.get(1).expect("url not found")).expect("cannot parse url");
 
     println!("fetching image count...");
@@ -50,16 +62,17 @@ async fn main() {
             };
         }
         //TODO create an arg for this
-        let base_path = PathBuf::from("./tmp");
+        let base_path = save_location.clone();
         let mut download_handlers = Vec::new();
         for url in image_urls {
+            println!("{url}");
             download_handlers.push(downlaod_image(url, base_path.clone()))
         }
         for handle in download_handlers {
             handle.await.unwrap()
         }
     }
-    println!("downloaded {download_count} images");
+    println!("downloaded {count} images");
 }
 
 async fn downlaod_image(
@@ -91,16 +104,16 @@ impl From<reqwest::Error> for GetImageUrlErrors {
 }
 
 async fn get_image_url(url: Url) -> Result<String, GetImageUrlErrors> {
-    let html = reqwest::get(url.clone()).await?.text().await?;
+    let res = reqwest::get(url.clone()).await?;
+    if res.url().to_string() == "https://fapello.com/" {
+        let post_num: u16 = url.to_string().split("/").last().unwrap().parse().unwrap();
+        return Err(GetImageUrlErrors::PostDoesntExist(post_num)); 
+    }
+    let html = res.text().await?;
     let dom = tl::parse(&html, tl::ParserOptions::default()).unwrap();
     let mut qs_iter = dom.query_selector("a.uk-align-center").unwrap();
-    let handle = qs_iter.next();
-    //sometimes images are deleted from the site so this exists for that
-    if handle == None {
-        let post_num: u16 = url.to_string().split("/").last().unwrap().parse().unwrap();
-        return Err(GetImageUrlErrors::PostDoesntExist(post_num));
-    }
-    let node = handle.unwrap().get(dom.parser()).unwrap();
+    let handle = qs_iter.next().unwrap();
+    let node = handle.get(dom.parser()).unwrap();
     let link = node
         .as_tag()
         .unwrap()
