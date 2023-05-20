@@ -1,6 +1,6 @@
 # fap-dl
 
-Command-line program to download images from fapello.com
+Command-line program to download images from [fapello](https://fapello.com)
 
 ## usage instructions
 
