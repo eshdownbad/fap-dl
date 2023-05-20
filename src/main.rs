@@ -5,6 +5,7 @@ use tokio::{fs, io::AsyncWriteExt};
 
 #[tokio::main]
 async fn main() {
+    //TODO use clap or something for this
     let args: Vec<String> = env::args().collect();
     let save_location_arg = args
         .get(2)
@@ -22,6 +23,7 @@ async fn main() {
         };
     }
     //the first arg is the fapello url so yeah
+    //TODO prolly should add method for multiple urls
     let url = Url::from_str(args.get(1).expect("url not found")).expect("cannot parse url");
 
     //this is the last id on fapello aka the first post in the grid.
