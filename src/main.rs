@@ -72,6 +72,7 @@ async fn main() {
 /**
  * basic function just creates the file and copies the bytes from reqwest
  * thankfully this wasnt mind numbing to figure out (lie) :)
+ * TODO create struct for errors again and improve error handling
  */
 async fn downlaod_image(
     url: String,
@@ -124,8 +125,8 @@ async fn get_image_url(url: Url) -> Result<String, GetImageUrlErrors> {
     Ok(String::from(link))
 }
 
-/**returns the id of the latest image uploaded on fapello
-TODO use struct for error */
+/** returns the id of the latest image uploaded on fapello
+ * TODO use struct for error */
 async fn get_latest_id(url: Url) -> Result<u64, Box<dyn error::Error>> {
     let res = reqwest::get(url.clone()).await?;
     //if there is a redirect to home page it means the requested page was not found
