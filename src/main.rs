@@ -1,16 +1,26 @@
 use core::panic;
+use clap::Parser;
 use reqwest::Url;
-use std::{env, error, path::PathBuf, str::FromStr};
+use std::{error, path::PathBuf};
 use tokio::{fs, io::AsyncWriteExt};
+
+#[derive(Parser)]
+#[command(author, version, about)]
+struct CliArgs {
+    ///the path to the fapello page you want to download images from 
+    ///(note: the homepage download is not supported)
+    #[arg(long , short='u')]
+    url: Url,
+    ///path to the directory where file needs to be saved.
+    ///if path does not exist it is recursively created
+    #[arg(long , short='p' , default_value="./")]
+    path: PathBuf,
+}
 
 #[tokio::main]
 async fn main() {
-    //TODO use clap or something for this
-    let args: Vec<String> = env::args().collect();
-    let save_location_arg = args
-        .get(2)
-        .expect("2nd arg needs to be a path to save folder");
-    let save_location = PathBuf::from(save_location_arg);
+    let cli_args = CliArgs::parse();
+    let save_location = cli_args.path;
     if !save_location.is_dir() {
         println!("save folder path doesnt exist attempting to create...");
         match fs::create_dir_all(&save_location).await {
@@ -22,9 +32,9 @@ async fn main() {
             }
         };
     }
-    //the first arg is the fapello url so yeah
     //TODO prolly should add method for multiple urls
-    let url = Url::from_str(args.get(1).expect("url not found")).expect("cannot parse url");
+    //TODO add check to ensure its a fapello url
+    let url = cli_args.url;
 
     //this is the last id on fapello aka the first post in the grid.
     //there cant be ids bigger than this so yeah going from 1 to this good enough
@@ -177,7 +187,6 @@ async fn get_latest_id(url: Url) -> Result<u64, Box<dyn error::Error>> {
     //cause there is a slash in the end so last element is an empty string 
     //but fuck it we ball
     let link_parts = link.split("/").collect::<Vec<_>>();
-    println!("{:?}", link_parts.get(link_parts.len() - 2));
     let last_id: u64 = link_parts.get(link_parts.len() - 2).unwrap().parse()?;
     return Ok(last_id);
 }
