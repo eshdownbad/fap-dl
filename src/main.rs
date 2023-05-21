@@ -165,7 +165,7 @@ async fn get_latest_id(url: Url) -> Result<u64, GetLatestIdErrors> {
     /* idk why but i cant just use query selector the same way i can for js
     prolly smth to do with settings but ill figure that out later */
     let dom = tl::parse(&html, tl::ParserOptions::default()).unwrap();
-    // this is a hell hole and a tumour to js select #content > div > a
+    //this is a hell hole and a tumour to js select #content > div > a
     //there is def a better way to do this idk how tho
     //there are too many unwraps and magic numbers needed cause there are random whitespaces bruh
     //prolly strip the whitespaces before parsing but this works too
