@@ -1,21 +1,27 @@
-use core::panic;
 use clap::Parser;
+use core::panic;
 use reqwest::Url;
-use std::{error, path::PathBuf};
-use tokio::{fs, io::AsyncWriteExt};
+use std::{num::ParseIntError, path::PathBuf};
+use thiserror::Error;
+use tokio::{
+    fs,
+    io::{self, AsyncWriteExt},
+};
 
 #[derive(Parser)]
 #[command(author, version, about)]
 struct CliArgs {
-    ///the path to the fapello page you want to download images from 
+    ///the path to the fapello page you want to download images from
     ///(note: the homepage download is not supported)
-    #[arg(long , short='u')]
+    #[arg(long, short = 'u')]
     url: Url,
     ///path to the directory where file needs to be saved.
     ///if path does not exist it is recursively created
-    #[arg(long , short='p' , default_value="./")]
+    #[arg(long, short = 'p', default_value = "./")]
     path: PathBuf,
 }
+
+const FAPELLO_BASE_URL: &str =  "https://fapello.com/";
 
 #[tokio::main]
 async fn main() {
@@ -28,7 +34,7 @@ async fn main() {
                 println!("save path folder created")
             }
             Err(err) => {
-                panic!("{}", err)
+               panic!("{}" , err)
             }
         };
     }
@@ -80,16 +86,20 @@ async fn main() {
     println!("download complete");
 }
 
+#[derive(Debug, Error)]
+enum DownloadImageErrors {
+    #[error("io error: {0}")]
+    IoErrors(#[from] io::Error),
+    #[error("web request error: {0}")]
+    RequestError(#[from] reqwest::Error),
+}
 
 /**
  * basic function just creates the file and copies the bytes from reqwest
  * thankfully this wasnt mind numbing to figure out (lie) :)
  * TODO create struct for errors again and improve error handling
  */
-async fn downlaod_image(
-    url: String,
-    base_path: PathBuf,
-) -> Result<(), Box<dyn error::Error + Sync + Send>> {
+async fn downlaod_image(url: String, base_path: PathBuf) -> Result<(), DownloadImageErrors> {
     let filename = url.split("/").last().unwrap();
     let filepath = base_path.join(filename);
     let mut file = fs::File::create(filepath).await?;
@@ -99,23 +109,18 @@ async fn downlaod_image(
     Ok(())
 }
 
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum GetImageUrlErrors {
-    RequestError(reqwest::Error),
+    #[error("web request error: {0}")]
+    RequestError(#[from] reqwest::Error),
+    #[error("post {0} does not exist")]
     PostDoesntExist(u16),
-}
-
-impl From<reqwest::Error> for GetImageUrlErrors {
-    fn from(err: reqwest::Error) -> Self {
-        Self::RequestError(err)
-    }
 }
 
 /** this function parses the post html and gets the image url */
 async fn get_image_url(url: Url) -> Result<String, GetImageUrlErrors> {
     let res = reqwest::get(url.clone()).await?;
-    if res.url().to_string() == "https://fapello.com/" {
+    if res.url().to_string() == FAPELLO_BASE_URL {
         let post_num: u16 = url.to_string().split("/").last().unwrap().parse().unwrap();
         return Err(GetImageUrlErrors::PostDoesntExist(post_num));
     }
@@ -137,15 +142,24 @@ async fn get_image_url(url: Url) -> Result<String, GetImageUrlErrors> {
     Ok(String::from(link))
 }
 
+#[derive(Debug, Error)]
+enum GetLatestIdErrors {
+    #[error("web request error: {0}")]
+    RequestError(#[from] reqwest::Error),
+    #[error("url '{0}' does not exist")]
+    DoesNotExistError(String),
+    #[error("parse error {0}")]
+    IdParseError(#[from] ParseIntError),
+}
+
 /** returns the id of the latest image uploaded on fapello
  * TODO use struct for error */
-async fn get_latest_id(url: Url) -> Result<u64, Box<dyn error::Error>> {
+async fn get_latest_id(url: Url) -> Result<u64, GetLatestIdErrors> {
     let res = reqwest::get(url.clone()).await?;
     //if there is a redirect to home page it means the requested page was not found
     // why is this site like this why couldnt they just give us a 404 ;-;
-    if res.url().to_string() == "https://fapello.com/" {
-        //TODO create error type for this
-        panic!("{url} does not exist :(")
+    if res.url().to_string() == FAPELLO_BASE_URL {
+        return Err(GetLatestIdErrors::DoesNotExistError(url.to_string()));
     }
     let html = res.text().await?;
     /* idk why but i cant just use query selector the same way i can for js
@@ -183,8 +197,8 @@ async fn get_latest_id(url: Url) -> Result<u64, Box<dyn error::Error>> {
         .try_as_utf8_str()
         .unwrap();
     //do i rlly need to create a vec to get the 2nd last element (its the id) here? prolly no
-    //wondering why id is 2nd last and not last? 
-    //cause there is a slash in the end so last element is an empty string 
+    //wondering why id is 2nd last and not last?
+    //cause there is a slash in the end so last element is an empty string
     //but fuck it we ball
     let link_parts = link.split("/").collect::<Vec<_>>();
     let last_id: u64 = link_parts.get(link_parts.len() - 2).unwrap().parse()?;
