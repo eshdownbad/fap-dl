@@ -21,7 +21,7 @@ struct CliArgs {
     path: PathBuf,
 }
 
-const FAPELLO_BASE_URL: &str =  "https://fapello.com/";
+const FAPELLO_BASE_URL: &str = "https://fapello.com/";
 
 #[tokio::main]
 async fn main() {
@@ -34,14 +34,25 @@ async fn main() {
                 println!("save path folder created")
             }
             Err(err) => {
-               panic!("{}" , err)
+                panic!("{}", err)
             }
         };
     }
     //TODO prolly should add method for multiple urls
-    //TODO add check to ensure its a fapello url
-    let url = cli_args.url;
-
+    let mut url = cli_args.url;
+    if url.scheme() != "https" {
+        url.set_scheme("https")
+            .expect(format!("cannot set https scheme for '{url}'").as_str());
+    }
+    {
+        let urlstr = url.to_string();
+        if !urlstr.starts_with(FAPELLO_BASE_URL) {
+            panic!("{url} is not a valid fapello url")
+        }
+        if urlstr == FAPELLO_BASE_URL {
+            panic!("downloading from homepage is not supported")
+        }
+    }
     //this is the last id on fapello aka the first post in the grid.
     //there cant be ids bigger than this so yeah going from 1 to this good enough
     let largest_id = get_latest_id(url.clone()).await.unwrap();
