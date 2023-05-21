@@ -85,16 +85,23 @@ async fn main() {
             };
         }
     }
+    let mut download_count = 0;
     //welp time to download yay
     let mut download_handlers = Vec::new();
     for url in image_urls {
         download_handlers.push(downlaod_image(url, save_location.clone()))
     }
     for handle in download_handlers {
-        handle.await.unwrap()
+      match  handle.await {
+        Ok(filename) => {
+            download_count += 1;
+            println!("saved file {filename}");
+        },
+        Err(e) => println!("{}" , e)
+      }
     }
 
-    println!("download complete");
+    println!("downloaded {download_count} images");
 }
 
 #[derive(Debug, Error)]
@@ -108,16 +115,15 @@ enum DownloadImageErrors {
 /**
  * basic function just creates the file and copies the bytes from reqwest
  * thankfully this wasnt mind numbing to figure out (lie) :)
- * TODO create struct for errors again and improve error handling
+ * returns filename in result if successful.
  */
-async fn downlaod_image(url: String, base_path: PathBuf) -> Result<(), DownloadImageErrors> {
+async fn downlaod_image(url: String, base_path: PathBuf) -> Result<String, DownloadImageErrors> {
     let filename = url.split("/").last().unwrap();
     let filepath = base_path.join(filename);
     let mut file = fs::File::create(filepath).await?;
     let mut img_data = reqwest::get(url.clone()).await?.bytes().await?;
     file.write_all_buf(&mut img_data).await?;
-    println!("saved file: {filename}");
-    Ok(())
+    Ok(filename.to_string())
 }
 
 #[derive(Debug, Error)]
@@ -163,8 +169,7 @@ enum GetLatestIdErrors {
     IdParseError(#[from] ParseIntError),
 }
 
-/** returns the id of the latest image uploaded on fapello
- * TODO use struct for error */
+/** returns the id of the latest image uploaded on fapello */
 async fn get_latest_id(url: Url) -> Result<u64, GetLatestIdErrors> {
     let res = reqwest::get(url.clone()).await?;
     //if there is a redirect to home page it means the requested page was not found
